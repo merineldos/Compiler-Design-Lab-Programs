@@ -1,0 +1,16 @@
+#include <stdio.h>   // preprocessor directive
+
+int main() {
+    int a = 10;              // integer number
+    float b = 20.5;          /* float number with decimal */
+    char c = 'x';          
+    char d = '\n';          
+    char *str = "Hello \"World\""; 
+
+    if (a < b && b != 0) {
+        printf("Value of a: %d\n", a);
+    } 
+   
+
+    return 0;
+}
