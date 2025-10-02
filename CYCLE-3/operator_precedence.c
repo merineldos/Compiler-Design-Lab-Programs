@@ -2,7 +2,7 @@
 #include <string.h>
 
 int main() {
-    char stack[20], ip[20], opt[10][10][2], ter[10];
+    char stack[20], ip[20], opt[10][10], ter[10];
     int i, j, k, n, top = 0, col = 0, row = 0;
 
     // Initialize arrays
@@ -12,7 +12,7 @@ int main() {
     }
     for (i = 0; i < 10; i++) {
         for (j = 0; j < 10; j++) {
-            opt[i][j][0] = '\0';
+            opt[i][j] = '\0';
         }
     }
 
@@ -28,7 +28,7 @@ int main() {
     for (i = 0; i < n; i++) {
         for (j = 0; j < n; j++) {
             printf("Enter the value for %c %c: ", ter[i], ter[j]);
-            scanf("%s", opt[i][j]);
+            scanf(" %c", &opt[i][j]); // read single char
         }
     }
 
@@ -43,7 +43,7 @@ int main() {
     for (i = 0; i < n; i++) {
         printf("%c\t", ter[i]);
         for (j = 0; j < n; j++) {
-            printf("%c\t", opt[i][j][0]);
+            printf("%c\t", opt[i][j]); // now a single char
         }
         printf("\n");
     }
@@ -67,13 +67,13 @@ int main() {
             printf("String is accepted\n");
             break;
         } 
-        else if ((opt[col][row][0] == '<') || (opt[col][row][0] == '=')) {
-            stack[++top] = opt[col][row][0];
+        else if ((opt[col][row] == '<') || (opt[col][row] == '=')) { // compare single char
+            stack[++top] = opt[col][row];
             stack[++top] = ip[i];
             printf("Shift %c", ip[i]);
             i++;
         } 
-        else if (opt[col][row][0] == '>') {
+        else if (opt[col][row] == '>') {
             while (stack[top] != '<') {
                 --top;
             }
