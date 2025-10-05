@@ -1,63 +1,57 @@
 #include <stdio.h>
-#include <string.h>
+#include <stdlib.h>
 
-char closure[10][10]; // To store closure for each state
-int visited[10];      // To track visited states in closure expansion
+int no_of_states;
 
-// Recursively explore epsilon transitions
-void epsilon_closure(char state[], int *count) {
-    FILE *f = fopen("automata.txt", "r");
-    if (!f) {
-        printf("Error opening file.\n");
-        return;
+void reset(int closure[10][10]) {
+    for(int i = 0; i < no_of_states; i++)
+        for(int j = 0; j < no_of_states; j++)
+            if (i == j)
+                closure[i][j] = 1;
+            else
+                closure[i][j]=0;
+}
+
+void display(int closure[10][10]) {
+    printf("Epsilon closure of all states:\n");
+    for(int i = 0; i < no_of_states; i++) {
+        printf("q%d: {", i);
+        for(int j = 0; j < no_of_states; j++)
+            if(closure[i][j] == 1)
+                printf("q%d, ", j);
+        printf("}\n");
     }
-
-    char from[10], arrow[10], to[10];
-    while (fscanf(f, "%s %s %s", from, arrow, to) == 3) {
-        if (strcmp(from, state) == 0 && strcmp(arrow, "e") == 0) {
-            // Check if 'to' is already in closure
-            int already = 0;
-            for (int i = 0; i < *count; i++) {
-                if (strcmp(closure[i], to) == 0) {
-                    already = 1;
-                    break;
-                }
-            }
-
-            if (!already) {
-                strcpy(closure[(*count)++], to);
-                epsilon_closure(to, count);  // Recursive call
-            }
-        }
-    }
-
-    fclose(f);
 }
 
 int main() {
-    int n;
-    char states[10][10];
+    char state1, state2, inp;
+    int end;
 
-    printf("How many states? ");
-    scanf("%d", &n);
+    printf("Enter total number of states: ");
+    scanf("%d", &no_of_states);
 
-    printf("Enter states: ");
-    for (int i = 0; i < n; i++) {
-        scanf("%s", states[i]);
+    int closure[10][10];
+    FILE *INPUT = fopen("automata.txt", "r");
+    if(!INPUT) {
+        printf("Error opening file!\n");
+        return 1;
     }
 
-    for (int i = 0; i < n; i++) {
-        int count = 0;
-        strcpy(closure[count++], states[i]); // Start with itself
-        epsilon_closure(states[i], &count);   // Recursively expand
+    reset(closure);
 
-        // Print closure
-        printf("Epsilon closure of %s = { ", states[i]);
-        for (int j = 0; j < count; j++) {
-            printf("%s ", closure[j]);
+    for(int i = 0; i < no_of_states; i++) {
+        int state = i;
+        while((end = fscanf(INPUT, " %c %c %c", &state1, &inp, &state2)) != EOF) {
+            if(inp == 'e' && state == (state1 - '0')) {
+                closure[i][state2 - '0'] = 1;
+                state = state2 - '0';
+            }
         }
-        printf("}\n");
+        rewind(INPUT);
     }
 
+    display(closure);
+
+    fclose(INPUT);
     return 0;
 }

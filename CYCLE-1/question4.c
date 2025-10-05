@@ -1,232 +1,169 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-#define STATES 99
-#define SYMBOLS 20
+#define MAX_STATES 20
+#define MAX_SYMBOLS 10
 
-int N_symbols;
-int N_DFA_states;
-char *DFA_finals;
-int DFAtab[STATES][SYMBOLS];
-char StateName[STATES][STATES + 1];
-int N_optDFA_states;
-int OptDFA[STATES][SYMBOLS];
-char NEW_finals[STATES + 1];
+int dfa[MAX_STATES][MAX_SYMBOLS];
+int final[MAX_STATES];
+int num_states, num_symbols;
+char symbols[MAX_SYMBOLS];
+int distinguish[MAX_STATES][MAX_STATES];
 
-void print_dfa_table(int tab[][SYMBOLS], int nstates, int nsymbols, char *finals) {
-    int i, j;
-    puts("\nDFA: STATE TRANSITION TABLE");
-
-    printf("     | ");
-    for (i = 0; i < nsymbols; i++) printf(" %c ", '0' + i);
-    printf("\n-----+");
-    for (i = 0; i < nsymbols; i++) printf("----");
-    printf("\n");
-
-    for (i = 0; i < nstates; i++) {
-        printf(" %c | ", 'A' + i);
-        for (j = 0; j < nsymbols; j++)
-            printf(" %c ", tab[i][j]);
-        printf("\n");
-    }
-
-    printf("Final states = %s\n", finals);
-}
-
-void load_DFA_table() {
-    DFAtab[0][0] = 'B'; DFAtab[0][1] = 'C';
-    DFAtab[1][0] = 'E'; DFAtab[1][1] = 'F';
-    DFAtab[2][0] = 'A'; DFAtab[2][1] = 'A';
-    DFAtab[3][0] = 'F'; DFAtab[3][1] = 'E';
-    DFAtab[4][0] = 'D'; DFAtab[4][1] = 'F';
-    DFAtab[5][0] = 'D'; DFAtab[5][1] = 'E';
-
-    DFA_finals = "EF";
-    N_DFA_states = 6;
-    N_symbols = 2;
-}
-
-void get_next_state(char *nextstates, char *cur_states, int dfa[STATES][SYMBOLS], int symbol) {
-    for (int i = 0; i < strlen(cur_states); i++)
-        *nextstates++ = dfa[cur_states[i] - 'A'][symbol];
-    *nextstates = '\0';
-}
-
-char equiv_class_ndx(char ch, char stnt[][STATES + 1], int n) {
-    for (int i = 0; i < n; i++)
-        if (strchr(stnt[i], ch))
-            return i + '0';
+int get_symbol_index(char sym) {
+    for (int i = 0; i < num_symbols; i++)
+        if (symbols[i] == sym)
+            return i;
     return -1;
 }
 
-char is_one_nextstate(char *s) {
-    char equiv_class;
-    while (*s == '@') s++;
-    equiv_class = *s++;
-    while (*s) {
-        if (*s != '@' && *s != equiv_class)
-            return 0;
-        s++;
+void minimize_dfa() {
+    int i, j, k;
+
+    // Step 1: Initialize distinguish table
+    for (i = 0; i < num_states; i++) {
+        for (j = 0; j < i; j++) {
+            if ((final[i] && !final[j]) || (!final[i] && final[j]))
+                distinguish[i][j] = 1;  // Mark distinguishable
+            else
+                distinguish[i][j] = 0;
+        }
     }
-    return equiv_class;
-}
 
-int state_index(char *state, char stnt[][STATES + 1], int n, int *pn, int cur) {
-    char state_flags[STATES + 1];
-
-    if (!*state) return -1;
-
-    for (int i = 0; i < strlen(state); i++)
-        state_flags[i] = equiv_class_ndx(state[i], stnt, n);
-    state_flags[strlen(state)] = '\0';
-
-    printf(" %d:[%s]\t--> [%s] (%s)\n", cur, stnt[cur], state, state_flags);
-
-    if (is_one_nextstate(state_flags))
-        return state_flags[0] - '0';
-    else {
-        strcpy(stnt[*pn], state_flags);
-        return (*pn)++;
+    // Step 2: Iteratively mark distinguishable pairs
+    int changed = 1;
+    while (changed) {
+        changed = 0;
+        for (i = 0; i < num_states; i++) {
+            for (j = 0; j < i; j++) {
+                if (distinguish[i][j]) continue;
+                for (k = 0; k < num_symbols; k++) {
+                    int a = dfa[i][k];
+                    int b = dfa[j][k];
+                    if (a == -1 || b == -1) continue; // skip missing transitions
+                    if (a < b) {
+                        if (distinguish[b][a]) { 
+                            distinguish[i][j] = 1; 
+                            changed = 1; 
+                            break; 
+                        }
+                    } else {
+                        if (distinguish[a][b]) { 
+                            distinguish[i][j] = 1; 
+                            changed = 1; 
+                            break; 
+                        }
+                    }
+                }
+            }
+        }
     }
-}
 
-int init_equiv_class(char statename[][STATES + 1], int n, char *finals) {
-    int i, j;
+    // Step 3: Group equivalent states
+    int groups[MAX_STATES], group_id = 0, printed[MAX_STATES] = {0};
 
-    if (strlen(finals) == n) {
-        strcpy(statename[0], finals);
+    // Initialize groups
+    for (i = 0; i < num_states; i++) 
+        groups[i] = -1;
+
+    // Group equivalent states
+    for (i = 0; i < num_states; i++) {
+        if (groups[i] == -1) {
+            groups[i] = group_id;
+            for (j = i + 1; j < num_states; j++) {
+                if (!distinguish[i > j ? i : j][i < j ? i : j]) {
+                    groups[j] = group_id;
+                }
+            }
+            group_id++;
+        }
+    }
+
+    // Step 4: Print minimized DFA
+    printf("\nMinimized DFA:\n");
+    printf("Total states: %d\n", group_id);
+
+    printf("State\t");
+    for (i = 0; i < num_symbols; i++)
+        printf("%c\t", symbols[i]);
+    printf("\n");
+
+    for (i = 0; i < group_id; i++) {
+        printf("Q%d\t", i);
+        for (j = 0; j < num_symbols; j++) {
+            int target = -1;
+            for (k = 0; k < num_states; k++) {
+                if (groups[k] == i && dfa[k][j] != -1) {
+                    target = groups[dfa[k][j]];
+                    break;
+                }
+            }
+            if (target != -1)
+                printf("Q%d\t", target);
+            else
+                printf("-\t");
+        }
+        printf("\n");
+    }
+
+    // Step 5: Print final states
+    printf("Final states: ");
+    for (i = 0; i < num_states; i++) {
+        if (final[i] && !printed[groups[i]]) {
+            printf("Q%d ", groups[i]);
+            printed[groups[i]] = 1;
+        }
+    }
+    printf("\n");
+}  
+
+
+int main() {
+    printf("Enter number of states in DFA: ");
+    scanf("%d", &num_states);
+
+    printf("Enter number of input symbols: ");
+    scanf("%d", &num_symbols);
+
+    printf("Enter input symbols:\n");
+    for (int i = 0; i < num_symbols; i++)
+        scanf(" %c", &symbols[i]);
+
+    // Initialize DFA table with -1
+    for (int i = 0; i < MAX_STATES; i++)
+        for (int j = 0; j < MAX_SYMBOLS; j++)
+            dfa[i][j] = -1;
+
+    FILE *fp = fopen("dfa.txt", "r");
+    if (!fp) {
+        printf("Cannot open file dfa.txt\n");
         return 1;
     }
 
-    strcpy(statename[1], finals);
-    for (i = j = 0; i < n; i++) {
-        if (i == *finals - 'A') {
-            finals++;
-        } else {
-            statename[0][j++] = i + 'A';
+    int state1, state2;
+    char inp;
+    while (fscanf(fp, "%d %c %d", &state1, &inp, &state2) != EOF) {
+        int sym_index = get_symbol_index(inp);
+        if (sym_index == -1) {
+            printf("Unknown input symbol %c\n", inp);
+            return 1;
         }
+        dfa[state1][sym_index] = state2;
     }
-    statename[0][j] = '\0';
-    return 2;
-}
+    fclose(fp);
 
-int get_optimized_DFA(char stnt[][STATES + 1], int n, int dfa[][SYMBOLS], int n_sym, int newdfa[][SYMBOLS]) {
-    int n2 = n;
-    char nextstate[STATES + 1];
+    printf("Enter number of final states: ");
+    int n;
+    scanf("%d", &n);
 
+    printf("Enter final states: ");
     for (int i = 0; i < n; i++) {
-        for (int j = 0; j < n_sym; j++) {
-            get_next_state(nextstate, stnt[i], dfa, j);
-            newdfa[i][j] = state_index(nextstate, stnt, n, &n2, i) + 'A';
-        }
+        int f;
+        scanf("%d", &f);
+        final[f] = 1;
     }
 
-    return n2;
-}
-
-void chr_append(char *s, char ch) {
-    int n = strlen(s);
-    s[n] = ch;
-    s[n + 1] = '\0';
-}
-
-void sort(char stnt[][STATES + 1], int n) {
-    char temp[STATES + 1];
-    for (int i = 0; i < n - 1; i++)
-        for (int j = i + 1; j < n; j++)
-            if (stnt[i][0] > stnt[j][0]) {
-                strcpy(temp, stnt[i]);
-                strcpy(stnt[i], stnt[j]);
-                strcpy(stnt[j], temp);
-            }
-}
-
-int split_equiv_class(char stnt[][STATES + 1], int i1, int i2, int n, int n_dfa) {
-    char *old = stnt[i1], *vec = stnt[i2];
-    int i, n2 = n, flag = 0;
-    char newstates[STATES][STATES + 1] = {{0}};
-
-    for (i = 0; vec[i]; i++)
-        chr_append(newstates[vec[i] - '0'], old[i]);
-
-    for (i = 0; i < n_dfa; i++) {
-        if (newstates[i][0]) {
-            if (!flag) {
-                strcpy(stnt[i1], newstates[i]);
-                flag = 1;
-            } else {
-                strcpy(stnt[n2++], newstates[i]);
-            }
-        }
-    }
-
-    sort(stnt, n2);
-    return n2;
-}
-
-int set_new_equiv_class(char stnt[][STATES + 1], int n, int newdfa[][SYMBOLS], int n_sym, int n_dfa) {
-    int i, j, k;
-    for (i = 0; i < n; i++) {
-        for (j = 0; j < n_sym; j++) {
-            k = newdfa[i][j] - 'A';
-            if (k >= n)
-                return split_equiv_class(stnt, i, k, n, n_dfa);
-        }
-    }
-    return n;
-}
-
-void print_equiv_classes(char stnt[][STATES + 1], int n) {
-    printf("\nEQUIV. CLASS CANDIDATES:");
-    for (int i = 0; i < n; i++)
-        printf(" %d:[%s]", i, stnt[i]);
-    printf("\n");
-}
-
-int optimize_DFA(int dfa[][SYMBOLS], int n_dfa, int n_sym, char *finals,
-                 char stnt[][STATES + 1], int newdfa[][SYMBOLS]) {
-    int n = init_equiv_class(stnt, n_dfa, finals);
-    int n2;
-
-    while (1) {
-        print_equiv_classes(stnt, n);
-        n2 = get_optimized_DFA(stnt, n, dfa, n_sym, newdfa);
-        if (n != n2)
-            n = set_new_equiv_class(stnt, n, newdfa, n_sym, n_dfa);
-        else
-            break;
-    }
-
-    return n;
-}
-
-int is_subset(char *s, char *t) {
-    while (*t)
-        if (!strchr(s, *t++)) return 0;
-    return 1;
-}
-
-void get_NEW_finals(char *newfinals, char *oldfinals, char stnt[][STATES + 1], int n) {
-    for (int i = 0; i < n; i++)
-        if (is_subset(oldfinals, stnt[i]))
-            *newfinals++ = i + 'A';
-    *newfinals = '\0';
-}
-
-int main() {
-    load_DFA_table();
-
-    
-    print_dfa_table(DFAtab, N_DFA_states, N_symbols, DFA_finals);
-
-    
-    N_optDFA_states = optimize_DFA(DFAtab, N_DFA_states, N_symbols, DFA_finals, StateName, OptDFA);
-
-   
-    get_NEW_finals(NEW_finals, DFA_finals, StateName, N_optDFA_states);
-
-    
-    print_dfa_table(OptDFA, N_optDFA_states, N_symbols, NEW_finals);
-
+    minimize_dfa();
     return 0;
 }

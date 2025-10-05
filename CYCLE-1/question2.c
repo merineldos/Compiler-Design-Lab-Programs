@@ -1,120 +1,99 @@
-#include<stdio.h>
-#include<string.h>
+#include <stdio.h>
+#include <stdlib.h>
 
-int states, symbols, transitions;
-int trans[10][10][10];  // transition[state][symbol][next_states]
-int epsilon[10][10];    // epsilon closures
-int final[10];          // final states
+int no_of_states;
+int no_of_symbols;
 
-void computeEpsilonClosure(int state, int closure[]) {
-    closure[state] = 1;
-    for(int i = 0; i < states; i++) {
-        if(trans[state][symbols-1][i] && !closure[i]) {
-            computeEpsilonClosure(i, closure);
-        }
+void reset(int closure[10][10]) {
+    for(int i = 0; i < no_of_states; i++)
+        for(int j = 0; j < no_of_states; j++)
+            if (i == j)
+                closure[i][j] = 1;
+            else
+                closure[i][j]=0;
+}
+
+void display(int closure[10][10]) {
+    printf("Epsilon closure of all states:\n");
+    for(int i = 0; i < no_of_states; i++) {
+        printf("q%d: {", i);
+        for(int j = 0; j < no_of_states; j++)
+            if(closure[i][j] == 1)
+                printf("q%d, ", j);
+        printf("}\n");
     }
 }
 
-void printSet(int set[]) {
-    printf("{");
-    for(int i = 0; i < states; i++) {
-        if(set[i]) printf("q%d ", i);
+void epsilon_closure(int closure[10][10], FILE *input_file) {
+    char state1, state2, inp;
+    int end;
+
+    for(int i = 0; i < no_of_states; i++) {
+        int state = i;
+        while((end = fscanf(input_file, " %c %c %c", &state1, &inp, &state2)) != EOF) {
+            if(inp == 'e' && state == (state1 - '0')) {
+                closure[i][state2 - '0'] = 1;
+                state = state2 - '0';
+            }
+        }
+        rewind(input_file);
     }
-    printf("} ");
 }
 
 int main() {
-    char alpha[10];
-    int start, numFinal;
-    
-    printf("Enter number of states: ");
-    scanf("%d", &states);
-    
-    printf("Enter number of symbols (including epsilon): ");
-    scanf("%d", &symbols);
-    
-    printf("Enter symbols (e for epsilon): ");
-    for(int i = 0; i < symbols; i++) {
-        scanf(" %c", &alpha[i]);
+    printf("Enter total number of states: ");
+    scanf("%d", &no_of_states);
+
+    printf("Enter number of input symbols (excluding epsilon): ");
+    scanf("%d", &no_of_symbols);
+
+    int closure[10][10];
+    reset(closure);
+
+    FILE *input_file = fopen("automata.txt", "r");
+    if(!input_file) {
+        printf("Error opening file!\n");
+        return 1;
     }
+    epsilon_closure(closure, input_file);
+    display(closure);
+
     
-    printf("Enter start state: ");
-    scanf("%d", &start);
-    
-    printf("Enter number of final states: ");
-    scanf("%d", &numFinal);
-    
-    printf("Enter final states: ");
-    for(int i = 0; i < numFinal; i++) {
-        int f;
-        scanf("%d", &f);
-        final[f] = 1;
-    }
-    
-    printf("Enter number of transitions: ");
-    scanf("%d", &transitions);
-    
-    printf("Enter transitions (from symbol to):\n");
-    for(int i = 0; i < transitions; i++) {
-        int from, to;
-        char symbol;
-        scanf("%d %c %d", &from, &symbol, &to);
-        
-        int sym_index = 0;
-        for(int j = 0; j < symbols; j++) {
-            if(alpha[j] == symbol) {
-                sym_index = j;
-                break;
-            }
-        }
-        trans[from][sym_index][to] = 1;
-    }
-    
-    // Compute epsilon closures
-    for(int i = 0; i < states; i++) {
-        computeEpsilonClosure(i, epsilon[i]);
-    }
-    
-    printf("\nEquivalent NFA without epsilon:\n");
-    printf("Start state: ");
-    printSet(epsilon[start]);
-    printf("\n");
-    
-    printf("Transitions:\n");
-    for(int i = 0; i < states; i++) {
-        for(int j = 0; j < symbols-1; j++) { // exclude epsilon
-            int result[10] = {0};
-            
-            // For each state in epsilon closure of i
-            for(int k = 0; k < states; k++) {
-                if(epsilon[i][k]) {
-                    // Add epsilon closure of all states reachable by symbol j
-                    for(int l = 0; l < states; l++) {
-                        if(trans[k][j][l]) {
-                            for(int m = 0; m < states; m++) {
-                                if(epsilon[l][m]) result[m] = 1;
-                            }
-                        }
+    int nfa[10][10][10] = {0}; // nfa[state][symbol][next_state]
+    char state1, state2, inp;
+    int end;
+
+    while((end = fscanf(input_file, " %c %c %c", &state1, &inp, &state2)) != EOF) {
+    if(inp != 'e') { 
+        int from = state1 - '0';
+        int sym = inp - 'a'; 
+        int to = state2 - '0';
+
+        // For every state that can reach "from" via epsilon
+        for(int s = 0; s < no_of_states; s++) {
+            if(closure[s][from]) {
+                // Add epsilon-closure of "to" into transition table
+                for(int k = 0; k < no_of_states; k++) {
+                    if(closure[to][k]) {
+                        nfa[s][sym][k] = 1;
                     }
                 }
             }
-            
-            printSet(epsilon[i]);
-            printf("on %c -> ", alpha[j]);
-            printSet(result);
-            printf("\n");
         }
     }
-    
-    printf("\nFinal states: ");
-    for(int i = 0; i < states; i++) {
-        for(int j = 0; j < states; j++) {
-            if(epsilon[i][j] && final[j]) {
-                printSet(epsilon[i]);
-                break;
-            }
+}
+    // Step 3: Display resulting NFA
+    printf("\nNFA transition table (after removing epsilon transitions):\n");
+    for(int i = 0; i < no_of_states; i++) {
+        for(int j = 0; j < no_of_symbols; j++) {
+            printf("From q%d on %c: {", i, 'a' + j);
+            for(int k = 0; k < no_of_states; k++)
+                if(nfa[i][j][k])
+                    printf("q%d, ", k);
+            printf("}\n");
         }
     }
-    
+
+    fclose(input_file);
     return 0;
 }
